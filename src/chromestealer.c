@@ -289,13 +289,13 @@ int main(int argc, char *argv[]){
     printf("[!] Error getting temp path directory: %d\n", GetLastError());
   };
   sprintf(tempPath + strlen(tempPath), "memes999\\");
-  if(CreateDirectoryA(
+  if(!CreateDirectoryA(
     tempPath,
     NULL
   )){
     DWORD err = GetLastError();
-    if (err != 183){
-      printf("[!] Error creating temp directory: %d\n", GetLastError());
+    if (err != 183 && err != 0){
+      printf("[!] Error creating temp directory: %d\n", err);
       return -1;
     }
   };
