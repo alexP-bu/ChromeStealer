@@ -1,24 +1,27 @@
 CC=gcc
 CFLAGS=-Wall -static
-OBJ = bin
+OBJDIR = bin
 LIB = lib
 SRC = src
-OBJS = $(OBJ)/chromestealer.o $(OBJ)/sqlite3.o
+OBJS = $(OBJDIR)/chromestealer.o $(OBJDIR)/sqlite3.o
 LDFLAGS = -lShlwapi -lCrypt32 -lbcrypt
 
 all: chromestealer
 
-chromestealer: $(OBJ) | $(OBJS)
+chromestealer: $(OBJDIR) | $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) -o chromestealer
 
-$(OBJ):
-	mkdir $(OBJ)
+$(OBJDIR):
+	mkdir $(OBJDIR)
 
-$(OBJ)/sqlite3.o: $(LIB)/sqlite3.c
+$(OBJDIR)/sqlite3.o: $(LIB)/sqlite3.c
 	$(CC) $(CFLAGS) -c lib/sqlite3.c -o $@
 
-$(OBJ)/chromestealer.o: $(SRC)/chromestealer.c
+$(OBJDIR)/chromestealer.o: $(SRC)/chromestealer.c
 	$(CC) $(FLAGS) -c src/chromestealer.c -o $@
 
+.PHONY: clean
+
 clean:
-	rm chromestealer $(OBJ)/chromestealer.o $(OBJ)/sqlite3.o
+	del /q $(OBJDIR)
+	del chromestealer.exe
